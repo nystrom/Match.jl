@@ -76,6 +76,63 @@ end
 # in which `MatchFailure` is a possible result.
 #
 function adjust_case_for_return_macro(__module__, location, pattern, result, predeclared_temps)
+    # Handle the simple cases so we can get some guard reuse.
+    #
+    # p => begin
+    #     foo() || @match_fail
+    #     e
+    # end
+    # -->
+    # p where foo() => e
+    #
+    # p => begin
+    #     foo() && @match_fail
+    #     e
+    # end
+    # -->
+    # p where !foo() => e
+
+    if result isa Expr && result.head == :block && length(result.args) > 1
+        for i in eachindex(result.args)
+            arg = result.args[i]
+            arg isa LineNumberNode && continue
+            arg isa Expr || break
+
+            # Rewrite `if foo; bar end` to `foo && bar`
+            if arg.head == :if && length(arg.args) == 2
+                arg = Expr(:(&&), arg.args...)
+            end
+
+            if arg.head == :(||) || arg.head == :(&&)
+                arg.args[end] isa Expr || break
+                p = arg.args[end]
+                p.head == :macrocall || break
+                (p.args[1] == :var"@match_fail" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_fail"))) || break
+
+                guards = result.args[1:i-1]
+                if length(arg.args) == 2
+                    push!(guards, arg.args[1])
+                else
+                    push!(guards, Expr(arg.head, arg.args[1:end-1]...))
+                end
+
+                guard = Expr(:block, guards...)
+                if arg.head == :(&&)
+                    guard = Expr(:call, :!, guard)
+                end
+
+                return adjust_case_for_return_macro(
+                    __module__,
+                    location,
+                    Expr(:where, pattern, guard),
+                    Expr(:block, result.args[i+1:end]...),
+                    predeclared_temps)
+            else
+                break
+            end
+        end
+    end
+
     value = gensym("value")
     label = gensym("label")
     found_early_exit::Bool = false

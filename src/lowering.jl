@@ -12,6 +12,39 @@ end
 function code(e::BoundExpression)
     value = Expr(:block, e.location, e.source)
     assignments = Expr(:block, (:($k = $v) for (k, v) in e.assignments)...)
+
+    # Since expressions can be duplicated, we need to rename all the goto labels
+    # that occur in the expressionto be unique.
+    # TODO move this elsewhere.
+    dict = Dict()
+    function collect_labels(n)
+        n
+    end
+    function collect_labels(n::Base.Expr)
+        if n.head == :macrocall && length(n.args) >= 2 && n.args[1] == Symbol("@label")
+            dict[n.args[end]] = gensym("label")
+        end
+        n
+    end
+
+    function gensym_label(n::Base.Expr)
+        if n.head == :symbolicgoto
+            return Expr(n.head, get(dict, n.args[1], n.args[1]))
+        end
+        if n.head == :macrocall && length(n.args) >= 2 && n.args[1] == Symbol("@label")
+            return Expr(n.head, n.args[1], n.args[2:end-1]..., get(dict, n.args[end], n.args[end]))
+        end
+        return n
+    end
+    function gensym_label(n)
+        n
+    end
+
+    MacroTools.prewalk(collect_labels, value)
+    if !isempty(dict)
+        value = MacroTools.prewalk(gensym_label, value)
+    end
+
     return Expr(:let, assignments, value)
 end
 

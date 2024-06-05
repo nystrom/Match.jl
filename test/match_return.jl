@@ -117,13 +117,81 @@ end
     @test (@match Foo(1, 2) begin
         Foo(x, 2) => begin
             x
-            @Match.match_fail
+            Match.@match_fail
         end
         Foo(1, x) => begin
-            @Match.match_return x
+            Match.@match_return x
             12
         end
     end) == 2
 end
+
+@testset "lift || expressions into guard" begin
+    @test (@match Foo(1, 2) begin
+        Foo(x, 2) => begin
+            x == 1 || @match_fail
+            2
+        end
+        # TODO this should be recognized as a duplicate.
+        Foo(x, 2) where (x == 1) => 3
+        _ => 4
+    end) == 2
+end
+
+@testset "lift && expressions into guard" begin
+    @test (@match Foo(1, 2) begin
+        Foo(x, 2) => begin
+            x == 1 && @match_fail
+            2
+        end
+        # TODO this should be recognized as a duplicate.
+        Foo(x, 2) where (x == 1) => 3
+        _ => 4
+    end) == 3
+end
+
+@testset "lift if expressions into guard" begin
+    @test (@match Foo(1, 2) begin
+        Foo(x, 2) => begin
+            if x == 1
+                @match_fail
+            end
+            2
+        end
+        # TODO this should be recognized as a duplicate.
+        Foo(x, 2) where (x == 1) => 3
+        _ => 4
+    end) == 3
+end
+
+# This was generating duplicate goto labels.
+@testset "do not generate duplicate labels" begin
+
+    foo(x) = x == 9
+
+    @test begin
+
+        43 == @match Foo(1,2) begin
+
+            # Changing this to a simpler condition passes
+            Foo(_, _) where (foo(1) && foo(2)) => 15
+
+            Foo(_, _) where foo(7) =>
+                begin
+                    if foo(9)
+                        @match_return 16
+                    end
+                    17
+                end
+
+            # foo(1) fails, foo(2) passes
+            # moving this up, passes
+            Foo(_, _) where (foo(1) && foo(3)) => 18
+
+            _ => 43
+        end
+    end
+end
+
 
 end
