@@ -507,6 +507,22 @@ end
         end
     end
 
+    if VERSION >= v"1.8"
+        @testset "warn for unreachable cases with comparisons" begin
+            let line = (@__LINE__) + 5
+                @test_warn(
+                    "$file:$line: Case 4: `Foo(x, y) where x >= y =>` is not reachable.",
+                    @eval @match Foo(1, 2) begin
+                        Foo(x, y) where (x > y) => 1
+                        Foo(x, y) where (x < y) => 2
+                        Foo(x, y) where (x <= y) => 3
+                        Foo(x, y) where (x >= y) => 4
+                    end
+                    )
+            end
+        end
+    end
+
     @testset "assignment to pattern variables are permitted but act locally" begin
         @test (@match 1 begin
             x where begin
@@ -653,6 +669,23 @@ end
     end
     @test f(Greed) == "Greed is the color of money."
     @test f(Yellow) == "other"
+end
+
+@testset "ensure that comparisons work in guards" begin
+    function f(v)
+        @match v begin
+            (x::Int) where (x < 0) => 1
+            (x::Int) where (x > 0) => 2
+            (x::Int) where (x <= 0) => 3
+            # unreachable
+            # (x::Int) where (x >= 0) => 4
+            _ => 0
+        end
+    end
+    @test f(0) == 3
+    @test f(1) == 2
+    @test f(2) == 2
+    @test f(-1) == 1
 end
 
 end
