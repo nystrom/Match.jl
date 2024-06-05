@@ -509,7 +509,7 @@ end
 
     if VERSION >= v"1.8"
         @testset "warn for unreachable cases with comparisons" begin
-            let line = (@__LINE__) + 5
+            let line = (@__LINE__) + 7
                 @test_warn(
                     "$file:$line: Case 4: `Foo(x, y) where x >= y =>` is not reachable.",
                     @eval @match Foo(1, 2) begin
