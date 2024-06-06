@@ -39,8 +39,9 @@ function build_automaton_core(
             filter = BoundTypeTestPattern(location, type, binder.input_variable, input_type)
             entry = remove(filter, true, entry, binder)
         end
+    else
+        binder.types[binder.input_variable] = input_type
     end
-    binder.types[binder.input_variable] = input_type
 
     # Build the decision automaton with the given entry point
     work_queue = Set{AutomatonNode}([entry])
