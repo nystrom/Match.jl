@@ -173,7 +173,6 @@ end
 
         43 == @match Foo(1,2) begin
 
-            # Changing this to a simpler condition passes
             Foo(_, _) where (foo(1) && foo(2)) => 15
 
             Foo(_, _) where foo(7) =>
@@ -184,8 +183,6 @@ end
                     17
                 end
 
-            # foo(1) fails, foo(2) passes
-            # moving this up, passes
             Foo(_, _) where (foo(1) && foo(3)) => 18
 
             _ => 43
