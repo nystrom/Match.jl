@@ -97,30 +97,31 @@ end
 # Has the side-effect of adding a mapping to the dict.
 #
 function dedup!(
-    dict::Dict{DeduplicatedAutomatonNode, DeduplicatedAutomatonNode},
+    dict::Dict{AutomatonNode, DeduplicatedAutomatonNode},
     node::AutomatonNode,
     binder::BinderContext)
-    next = if node.next isa Tuple{}
-        node.next
-    elseif node.next isa Tuple{AutomatonNode}
-        (dedup!(dict, node.next[1], binder),)
-    elseif node.next isa Tuple{AutomatonNode, AutomatonNode}
-        t = dedup!(dict, node.next[1], binder)
-        f = dedup!(dict, node.next[2], binder)
-        (t, f)
-    else
-        error("Unknown next type: $(node.next)")
+
+    get!(dict, node) do
+        next = if node.next isa Tuple{}
+            node.next
+        elseif node.next isa Tuple{AutomatonNode}
+            (dedup!(dict, node.next[1], binder),)
+        elseif node.next isa Tuple{AutomatonNode, AutomatonNode}
+            t = dedup!(dict, node.next[1], binder)
+            f = dedup!(dict, node.next[2], binder)
+            (t, f)
+        else
+            error("Unknown next type: $(node.next)")
+        end
+        DeduplicatedAutomatonNode(node.action, next)
     end
-    key = DeduplicatedAutomatonNode(node.action, next)
-    result = get!(dict, key, key)
-    result
 end
 
 #
 # Deduplicate the decision automaton by collapsing behaviorally identical nodes.
 #
 function deduplicate_automaton(entry::AutomatonNode, binder::BinderContext)
-    dedup_map = Dict{DeduplicatedAutomatonNode, DeduplicatedAutomatonNode}()
+    dedup_map = Dict{AutomatonNode, DeduplicatedAutomatonNode}()
     result = Vector{DeduplicatedAutomatonNode}()
     top_down_nodes = reachable_nodes(entry)
     for e in Iterators.reverse(top_down_nodes)
