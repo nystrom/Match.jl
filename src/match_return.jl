@@ -35,6 +35,19 @@ macro match_return(x)
     error("$(__source__.file):$(__source__.line): @match_return may only be used within the value of a @match case.")
 end
 
+function is_match_return(p::Base.Expr)
+    is_expr(p, :macrocall) || return false
+    return p.args[1] == :var"@match_return" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_return"))
+end
+function is_match_fail(p::Base.Expr)
+    is_expr(p, :macrocall) || return false
+    return p.args[1] == :var"@match_fail" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_fail"))
+end
+function is_match(p::Base.Expr)
+    is_expr(p, :macrocall) || return false
+    return p.args[1] == :var"@match" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match"))
+end
+
 #
 # We implement @match_fail and @match_return as follows:
 #
@@ -92,7 +105,7 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
     # -->
     # p where !foo() => e
 
-    if result isa Expr && result.head == :block && length(result.args) > 1
+    if result isa Expr && result.head == :block
         for i in eachindex(result.args)
             arg = result.args[i]
             arg isa LineNumberNode && continue
@@ -106,8 +119,7 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
             if arg.head == :(||) || arg.head == :(&&)
                 arg.args[end] isa Expr || break
                 p = arg.args[end]
-                p.head == :macrocall || break
-                (p.args[1] == :var"@match_fail" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_fail"))) || break
+                is_match_fail(p) || break
 
                 guards = result.args[1:i-1]
                 if length(arg.args) == 2
@@ -121,6 +133,7 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
                     guard = Expr(:call, :!, guard)
                 end
 
+                # Pull the guard up into a `where` clause and try again.
                 return adjust_case_for_return_macro(
                     __module__,
                     location,
@@ -138,19 +151,15 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
     found_early_exit::Bool = false
     function adjust_top(p)
         is_expr(p, :macrocall) || return p
-        if length(p.args) == 3 &&
-            (p.args[1] == :var"@match_return"  || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_return")))
+        if length(p.args) == 3 && is_match_return(p)
             # :(@match_return e) -> :($value = $e; @goto $label)
             found_early_exit = true
             return Expr(:block, p.args[2], :($value = $(p.args[3])), :(@goto $label))
-        elseif length(p.args) == 2 &&
-            (p.args[1] == :var"@match_fail"  || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_fail")))
+        elseif length(p.args) == 2 && is_match_fail(p)
             # :(@match_fail) -> :($value = $MatchFaulure; @goto $label)
             found_early_exit = true
             return Expr(:block, p.args[2], :($value = $MatchFailure), :(@goto $label))
-        elseif length(p.args) == 4 &&
-            (p.args[1] == :var"@match" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match")) ||
-             p.args[1] == :var"@match" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match")))
+        elseif length(p.args) == 4 && is_match(p)
             # Nested uses of @match should be treated as independent
             return macroexpand(__module__, p)
         else

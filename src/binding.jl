@@ -488,14 +488,13 @@ function shred_where_clause(
     assigned::ImmutableDict{Symbol, Symbol})::BoundPattern
     if @capture(guard, !g_)
         return shred_where_clause(g, !inverted, location, binder, assigned)
+    # Normalize comparisons to ==, <=, and >= to get better deuplicate guard detection
     elseif @capture(guard, g1_ != g2_)
         return shred_where_clause(Expr(:call, :(==), g1, g2), !inverted, location, binder, assigned)
     elseif @capture(guard, g1_ > g2_)
-        return shred_where_clause(Expr(:call, :(<), g2, g1), inverted, location, binder, assigned)
-    elseif @capture(guard, g1_ >= g2_)
-        return shred_where_clause(Expr(:call, :(<), g1, g2), !inverted, location, binder, assigned)
-    elseif @capture(guard, g1_ <= g2_)
-        return shred_where_clause(Expr(:call, :(>), g1, g2), !inverted, location, binder, assigned)
+        return shred_where_clause(Expr(:call, :(<=), g1, g2), !inverted, location, binder, assigned)
+    elseif @capture(guard, g1_ < g2_)
+        return shred_where_clause(Expr(:call, :(>=), g1, g2), !inverted, location, binder, assigned)
     elseif @capture(guard, g1_ && g2_) || @capture(guard, g1_ || g2_)
         left = shred_where_clause(g1, inverted, location, binder, assigned)
         right = shred_where_clause(g2, inverted, location, binder, assigned)
