@@ -166,15 +166,10 @@ end
 
 # This was generating duplicate goto labels.
 @testset "do not generate duplicate labels" begin
-
     foo(x) = x == 9
-
     @test begin
-
         43 == @match Foo(1,2) begin
-
             Foo(_, _) where (foo(1) && foo(2)) => 15
-
             Foo(_, _) where foo(7) =>
                 begin
                     if foo(9)
@@ -182,10 +177,26 @@ end
                     end
                     17
                 end
-
             Foo(_, _) where (foo(1) && foo(3)) => 18
-
             _ => 43
+        end
+    end
+end
+
+@testset "@match_fail and @match_return are lifted correctly into guard" begin
+    @test begin
+        2 == @match Foo(1,2) begin
+            Foo(x, y) => @match_fail
+            Foo(x, y) => @match_return 2
+        end
+    end
+end
+
+@testset "@match_fail is lifted correctly into guard" begin
+    @test begin
+        2 == @match Foo(1,2) begin
+            Foo(x, y) => @match_fail
+            Foo(x, y) => @match_return 2
         end
     end
 end

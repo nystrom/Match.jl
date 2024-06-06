@@ -39,14 +39,17 @@ function is_match_return(p::Base.Expr)
     is_expr(p, :macrocall) || return false
     return p.args[1] == :var"@match_return" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_return"))
 end
+is_match_return(p) = false
 function is_match_fail(p::Base.Expr)
     is_expr(p, :macrocall) || return false
     return p.args[1] == :var"@match_fail" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match_fail"))
 end
+is_match_fail(p) = false
 function is_match(p::Base.Expr)
     is_expr(p, :macrocall) || return false
     return p.args[1] == :var"@match" || p.args[1] == Expr(:., Symbol(string(@__MODULE__)), QuoteNode(:var"@match"))
 end
+is_match(p) = false
 
 #
 # We implement @match_fail and @match_return as follows:
@@ -89,7 +92,29 @@ end
 # in which `MatchFailure` is a possible result.
 #
 function adjust_case_for_return_macro(__module__, location, pattern, result, predeclared_temps)
-    # Handle the simple cases so we can get some guard reuse.
+
+    # Lift up useless @match_return.
+    if is_match_return(result)
+        return adjust_case_for_return_macro(
+            __module__,
+            location,
+            pattern,
+            Expr(:block, result.args[2:end]...),
+            predeclared_temps)
+    end
+
+    # Lift up useless @match_fail.
+    if is_match_fail(result)
+        return adjust_case_for_return_macro(
+            __module__,
+            location,
+            Expr(:where, pattern, false),
+            nothing,
+            predeclared_temps)
+    end
+
+    # Lift @match_fail from the beginning of the body into the guard
+    # so we can analyze the guard.
     #
     # p => begin
     #     foo() || @match_fail
@@ -104,6 +129,13 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
     # end
     # -->
     # p where !foo() => e
+    #
+    # p => begin
+    #     @match_fail
+    #     e
+    # end
+    # -->
+    # p where false => e
 
     if result isa Expr && result.head == :block
         for i in eachindex(result.args)
@@ -114,6 +146,11 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
             # Rewrite `if foo; bar end` to `foo && bar`
             if arg.head == :if && length(arg.args) == 2
                 arg = Expr(:(&&), arg.args...)
+            end
+
+            # Rewrite `@match_fail` to `true && @match_fail`.
+            if is_match_fail(arg)
+                arg = Expr(:(||), false, arg)
             end
 
             if arg.head == :(||) || arg.head == :(&&)
