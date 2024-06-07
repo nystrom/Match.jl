@@ -128,3 +128,22 @@ end
 macro ismatch(value, pattern)
     handle_ismatch(__source__, __module__, value, pattern)
 end
+
+# This macro is used internally to delay code generation of labels and gotos.
+macro __breakable__(body)
+    label = gensym("label")
+    body2 = MacroTools.prewalk(x -> begin
+            if x isa Expr && x.head == :macrocall
+                if x.args[1] == Symbol("@__breakable__")
+                    # Nested uses of @__breakable__ should be treated as independent
+                    return macroexpand(__module__, x; recursive=false)
+                elseif x.args[1] == Symbol("@break")
+                    return :(@goto $label)
+                else
+                    return macroexpand(__module__, x; recursive=false)
+                end
+            end
+            return x
+        end, body)
+    return Expr(:block, esc(body2), :(@label $label))
+end

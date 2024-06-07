@@ -22,6 +22,56 @@ struct Foo
     y
 end
 
+struct Appl
+    x
+    y
+    z
+end
+struct UnderscoreVararg end
+struct CoreAppl
+    x
+    y
+    z
+end
+struct Constant
+    x
+    y
+end
+struct RelVar
+    x
+end
+struct ScalarVar
+    x
+end
+struct CoreUnion
+    x
+    y
+end
+struct SuchThat
+    x
+    y
+    z
+    w
+end
+struct RelLiteral
+    data
+end
+struct SourceId end
+struct NativeId end
+struct AnonymousRel end
+struct RelAbstract
+    x
+    y
+    z
+end
+struct CoreBindings
+    x
+end
+struct RelVarDecl end
+struct ScalarVarDecl end
+struct CoreVarDecl end
+struct Annos end
+
 ##########
 
 abstract type RBTree end

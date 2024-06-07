@@ -13,6 +13,9 @@ function code(e::BoundExpression)
     value = Expr(:block, e.location, e.source)
     assignments = Expr(:block, (:($k = $v) for (k, v) in e.assignments)...)
 
+
+#===
+
     # Since expressions can be duplicated, we need to rename all the goto labels
     # that occur in the expressionto be unique.
     # TODO move this elsewhere.
@@ -44,6 +47,9 @@ function code(e::BoundExpression)
     if !isempty(dict)
         value = MacroTools.prewalk(gensym_label, value)
     end
+===#
+
+    value = macroexpand(Match, value; recursive=false)
 
     return Expr(:let, assignments, value)
 end

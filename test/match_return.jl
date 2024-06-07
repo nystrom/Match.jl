@@ -201,5 +201,240 @@ end
     end
 end
 
+#===
+@testset "match_fail huge" begin
+
+    foo(x) = x == 9
+
+    input_val = Appl(RelVar(:x), [Constant(1, Annos()), Constant(2, Annos())], Annos())
+
+    @test begin
+
+    43 == @match input_val begin
+
+        Appl(e, args, _) where (
+            foo(1) &&
+            foo(2)
+        ) => begin
+            foo(3) && &match_fail
+            1
+        end
+
+        Appl(left, args, annos) where foo(1) =>
+            begin
+                2
+            end
+
+        Appl(base, xs, as) where Base.any(x -> x isa UnderscoreVararg, xs) =>
+            begin
+                3
+            end
+
+        Appl(e, [], annos) => 4
+
+        Appl(Appl(x, xs, _), ys, annos) => 5
+
+        Appl(CoreAppl(x, xs, _), ys, annos) => 6
+
+        Appl(c::Constant, [e, args...], annos) where (!foo(1)) =>
+            begin
+                if foo(1)
+                    @match_return 7
+                end
+                8
+            end
+
+        Appl(v::ScalarVar, [e, args...], annos) where (!foo(3)) =>
+            begin
+                if foo(2)
+                    @match_return 9
+                end
+                10
+            end
+
+        Appl(RelVar(x), [op, args...], as) where foo(4) =>
+            11
+
+        Appl(e, args, annos) where foo(2) =>
+            12
+
+        Appl(CoreUnion([], _), _, _) => 13
+
+        Appl(SuchThat(xs, e, f, as1), es, as2) => 14
+
+        Appl(RelVar(x), args, annos) where (
+            !foo(1) &&
+            !foo(2) &&
+            !foo(3) &&
+            foo(4)
+        ) => 15
+
+        Appl(RelVar(x::RelLiteral), args, as) where (
+            !isempty(x.data) &&
+            let i = findfirst(arg -> arg isa Constant, args),
+                j = findfirst(arg -> !(arg isa Constant), args)
+                !isnothing(i) && !isnothing(j) && i < j
+            end
+        ) =>
+            begin
+                if baz()
+                    @match_return 16
+                end
+                17
+            end
+
+        Appl(x, args, _) where (
+            foo(1) &&
+            foo(2)
+        ) =>
+            begin
+                18
+            end
+
+        Appl(RelVar(x), args, _) where (
+            foo(1) &&
+            foo(2) &&
+            !foo(3) &&
+            foo(4)
+        ) =>
+            begin
+                19
+            end
+
+        Appl(RelVar(x::Union{NativeId,AnonymousRel}), args, _) where (
+            !foo(1) &&
+            !foo(2) &&
+            foo(3)
+        ) =>
+            begin
+                20
+            end
+
+        Appl(RelVar(x::SourceId), args, annos) where (
+            !foo(3)
+        ) =>
+            begin
+                if foo(1)
+                    foo(4) && @match_fail
+                    @match_return 21
+                end
+                foo(2) || @match_fail
+                22
+            end
+
+        Appl(e, args, annos) where (
+            let nargs = foo(1) ? 1 : missing
+                !ismissing(nargs) && nargs < length(args)
+            end
+        ) =>
+            begin
+                23
+            end
+
+        Appl(RelVar(x::NativeId), args, _) && e where (
+            foo(2)
+        ) =>
+            begin
+                24
+            end
+
+
+        Appl(e1::Constant, [e2::Constant], annos) =>
+            begin
+                25
+            end
+
+
+        Appl(e::RelAbstract, args, annos) where (
+            !foo(3)
+        ) =>
+            begin
+                26
+            end
+
+        Appl(e && CoreUnion(ambs, as), args, annos) where (
+            foo(4)
+        ) =>
+            begin
+                27
+            end
+
+        Appl(e && CoreUnion(ambs, _), args, annos) =>
+            begin
+                28
+            end
+
+        Appl(RelAbstract(CoreBindings([x::RelVarDecl, xs...]), f, as1), [e1, es...], as2) where (
+            !foo(2) && !foo(1)
+        ) =>
+            29
+
+        Appl(RelAbstract(CoreBindings([x::ScalarVarDecl, xs...]), f, as1), [e1, es...], as2) where (
+            !foo(2) && foo(1)
+        ) =>
+            30
+
+        Appl(RelAbstract(CoreBindings([x::ScalarVarDecl, xs...]), f, as1), [e1, es...], as2) where (
+            !foo(2) && foo(3)
+        ) =>
+            31
+
+        Appl(RelAbstract(CoreBindings([x::CoreVarDecl, xs...]), f, as1), [e1, es...], as2) where (
+            !foo(2) && foo(1)
+        ) =>
+            32
+
+        Appl(RelAbstract(CoreBindings([x::CoreVarDecl, xs...]), f, as1), [e1, es...], as2) where (
+            !foo(1) && foo(3)
+        ) =>
+            33
+
+        Appl(RelAbstract(CoreBindings([x::ScalarVarDecl, xs...]), _, _) && ra, [e1, es...], as) where (
+            !foo(1) && !foo(2)
+        ) =>
+            begin
+                foo(3) && @match_return 34
+                foo(4) || @match_fail
+                35
+            end
+
+        Appl(RelAbstract(CoreBindings([x::CoreVarDecl, xs...]), _, _) && ra, [e1, es...], as) where (
+            !foo(1) && !foo(2)
+        ) =>
+            begin
+                foo(3) && @match_return 36
+                foo(4) || @match_fail
+                37
+            end
+
+        Appl(CoreRelAbstract([x::CoreVarDecl, xs...], f, as1), [e1, es...], as2) where (
+            !foo(1) && foo(3)
+        ) =>
+            38
+
+        Appl(CoreRelAbstract([x::CoreVarDecl, xs...], f, as1), [e1, es...], as2) where (
+            !foo(1) && foo(3)
+        ) =>
+            39
+
+        Appl(CoreRelAbstract([x::CoreVarDecl, xs...], _, _) && ra, [e1, es...], as) where (
+            !foo(2) && !foo(3)
+        ) =>
+            begin
+                foo(4) && @match_return 40
+                foo(1) || @match_fail
+                41
+            end
+
+        Appl(RelVar(x::NativeId), args, annos) where foo(x) =>
+            42
+
+        _ => 43
+    end
+    end
+end
+
+==#
+
 
 end

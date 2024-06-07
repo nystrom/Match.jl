@@ -184,21 +184,22 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
     end
 
     value = gensym("value")
-    label = gensym("label")
     found_early_exit::Bool = false
     function adjust_top(p)
         is_expr(p, :macrocall) || return p
         if length(p.args) == 3 && is_match_return(p)
-            # :(@match_return e) -> :($value = $e; @goto $label)
+            # :(@match_return e) -> :($value = $e; @break)
             found_early_exit = true
-            return Expr(:block, p.args[2], :($value = $(p.args[3])), :(@goto $label))
+            return Expr(:block, p.args[2], :($value = $(p.args[3])), :(@break))
         elseif length(p.args) == 2 && is_match_fail(p)
-            # :(@match_fail) -> :($value = $MatchFaulure; @goto $label)
+            # :(@match_fail) -> :($value = $MatchFaulure; @break)
             found_early_exit = true
-            return Expr(:block, p.args[2], :($value = $MatchFailure), :(@goto $label))
+            return Expr(:block, p.args[2], :($value = $MatchFailure), :(@break))
         elseif length(p.args) == 4 && is_match(p)
             # Nested uses of @match should be treated as independent
             return macroexpand(__module__, p)
+        elseif p.args[1] == Symbol("@break")
+            return p
         else
             # It is possible for a macro to expand into @match_fail, so only expand one step.
             return adjust_top(macroexpand(__module__, p; recursive = false))
@@ -210,7 +211,9 @@ function adjust_case_for_return_macro(__module__, location, pattern, result, pre
         # Since we found an early exit, we need to predeclare the temp to ensure
         # it is in scope both for where it is written and in the constructed where clause.
         push!(predeclared_temps, value)
-        where_expr = Expr(:block, location, :($value = $rewritten_result), :(@label $label), :($value !== $MatchFailure))
+        where_expr = Expr(:block, location,
+            :(Match.@__breakable__ begin $value = $rewritten_result; end),
+            :($value !== $MatchFailure))
         new_pattern = :($pattern where $where_expr)
         new_result = value
         (new_pattern, new_result)
